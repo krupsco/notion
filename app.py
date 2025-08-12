@@ -7,7 +7,8 @@
 #   COMMAND_SHARED_SECRET = "<długi-losowy-klucz-HMAC>"
 #   APP_BASE_URL = "https://<twoja-aplikacja>.streamlit.app"
 
-import os, json, base64, hmac, hashlib
+import json, base64, hmac, hashlib
+from urllib.parse import urlencode
 from datetime import datetime, date
 from typing import List, Dict, Optional
 import pytz
@@ -323,6 +324,29 @@ def apply_command(cmd: dict) -> (bool, str):
     else:
         return False, f"Nieznana operacja: {op}"
 
+
+def sign_payload(payload_b64: str) -> str:
+    return hmac.new(
+        key=COMMAND_SHARED_SECRET.encode("utf-8"),
+        msg=payload_b64.encode("utf-8"),
+        digestmod=hashlib.sha256
+    ).hexdigest()
+
+def make_command_link(cmd_dict: dict) -> str:
+    payload_json = json.dumps(cmd_dict, ensure_ascii=False)
+    payload_b64 = base64.urlsafe_b64encode(payload_json.encode("utf-8")).decode("utf-8").rstrip("=")
+    sig = sign_payload(payload_b64)
+    base = APP_BASE_URL or "https://example.streamlit.app"
+    return f"{base}?{urlencode({'cmd': payload_b64, 'sig': sig})}"
+
+def decode_cmd(cmd_b64: str) -> dict | None:
+    try:
+        pad = "=" * (-len(cmd_b64) % 4)  # dopełnienie Base64URL
+        data = base64.urlsafe_b64decode(cmd_b64 + pad)
+        return json.loads(data.decode("utf-8"))
+    except Exception:
+        return None
+
 # ---------- UI: TABS ----------
 tab_list, tab_edit, tab_todos, tab_report, tab_diag, tab_cmd = st.tabs(
     ["Przegląd odcinków", "Aktualizuj właściwości", "Dodaj checklistę", "Mini‑raport", "Diagnostyka", "Polecenia"]
@@ -429,12 +453,16 @@ with tab_diag:
     st.caption("Upewnij się, że stałe PROP_* w kodzie zgadzają się 1:1 z powyższymi.")
 
 with tab_cmd:
-    st.write("Masz dwa sposoby wykonania polecenia z czatu: wklejenie JSON lub wejście w link z podpisem HMAC.")
+    st.write("Masz dwa sposoby wykonania polecenia: wklejenie JSON albo wejście w link z podpisem HMAC.")
     tab_cmd_local, tab_cmd_link, tab_gen = st.tabs(["Wklej polecenie", "Link (URL) z podpisem", "Generator linku"])
 
+    # 1) Wklej JSON i wykonaj
     with tab_cmd_local:
-        cmd_text = st.text_area("Polecenie (JSON)", height=180,
-                                placeholder='{"op":"update_properties","page":"#8 Opera, Warszawa, Zamek i małe biurko","props":{"Status":"Nagrany","Release Date":"2025-08-29"}}')
+        cmd_text = st.text_area(
+            "Polecenie (JSON)",
+            height=200,
+            placeholder='{"op":"update_properties","page":"#8 Opera, Warszawa, Zamek i małe biurko","props":{"Status":"Nagrany","Release Date":"2025-08-29"}}'
+        )
         if st.button("Zastosuj polecenie"):
             try:
                 cmd = json.loads(cmd_text)
@@ -443,12 +471,13 @@ with tab_cmd:
             except json.JSONDecodeError:
                 st.error("Niepoprawny JSON.")
 
+    # 2) Obsługa linku ?cmd=&sig= (klik, podgląd, wykonanie)
     with tab_cmd_link:
-        # zgodność z różnymi wersjami Streamlit
         try:
-            qp = st.query_params
+            qp = st.query_params   # nowsze Streamlit
         except Exception:
             qp = st.experimental_get_query_params()
+
         cmd_b64 = qp.get("cmd")
         sig = qp.get("sig")
         if isinstance(cmd_b64, list): cmd_b64 = cmd_b64[0] if cmd_b64 else None
@@ -469,7 +498,25 @@ with tab_cmd:
                         ok, msg = apply_command(cmd)
                         (st.success if ok else st.error)(msg)
         else:
-            st.info("Brak `cmd`/`sig` w URL. Wygeneruj link w czacie i kliknij.")
+            st.info("Brak `cmd`/`sig` w URL. Wygeneruj link w zakładce „Generator linku” lub w czacie.")
+
+    # 3) Generator linku z JSON (dla Ciebie, żeby szybko tworzyć klikane linki)
+    with tab_gen:
+        gen_json = st.text_area(
+            "JSON do podpisania",
+            height=150,
+            value='{"op":"update_properties","page":"#8 Opera, Warszawa, Zamek i małe biurko","props":{"Status":"Nagrany","Release Date":"2025-08-29"}}'
+        )
+        if st.button("Podpisz i pokaż link"):
+            try:
+                cmd_for_link = json.loads(gen_json)
+                link = make_command_link(cmd_for_link)
+                st.code(link)
+                st.caption("Kliknij link powyżej. W zakładce „Link (URL) z podpisem” zobaczysz podgląd i przycisk „Wykonaj polecenie”.")
+            except json.JSONDecodeError:
+                st.error("Niepoprawny JSON.")
+
+
 
     with tab_gen:
         st.caption("Lokalny generator (do testów): wklej JSON, dostaniesz podpisany link.")
