@@ -323,18 +323,18 @@ def apply_command(cmd: dict) -> (bool, str):
         return True, "Checklistę dodano."
 
     elif op == "add_note":
-    pages = fetch_episodes()
-    page_label = cmd.get("page")
-    page_id = find_page_id_by_label(pages, page_label) if page_label else cmd.get("page_id")
-    if not page_id:
-        return False, "Nie znaleziono strony odcinka (page/page_id)."
-    note = cmd.get("note", "").strip()
-    if not note:
-        return False, "Brak treści notatki."
-    notion.blocks.children.append(page_id, children=[{
-        "object": "block",
-        "type": "paragraph",
-        "paragraph": {"rich_text": [{"type": "text", "text": {"content": note}}]}
+        pages = fetch_episodes()
+        page_label = cmd.get("page")
+        page_id = find_page_id_by_label(pages, page_label) if page_label else cmd.get("page_id")
+        if not page_id:
+            return False, "Nie znaleziono strony odcinka (page/page_id)."
+        note = cmd.get("note", "").strip()
+        if not note:
+            return False, "Brak treści notatki."
+        notion.blocks.children.append(page_id, children=[{
+            "object": "block",
+            "type": "paragraph",
+            "paragraph": {"rich_text": [{"type": "text", "text": {"content": note}}]}
     }])
     return True, "Notatkę dodano."
 
