@@ -86,8 +86,13 @@ def page_title(p) -> str:
     return get_text(p["properties"].get(PROP_TITLE, {}).get("title", [])) or "(bez tytułu)"
 
 def page_status(p) -> str:
-    sel = p["properties"].get(PROP_STATUS, {}).get("select")
-    return sel["name"] if sel else "-"
+    prop = p["properties"].get(PROP_STATUS, {})
+    if prop.get("type") == "status":
+        val = prop.get("status")
+    else:
+        val = prop.get("select")
+    return val["name"] if val else "-"
+
 
 def page_date(p, prop_name: str) -> Optional[str]:
     d = p["properties"].get(prop_name, {}).get("date")
@@ -152,15 +157,14 @@ def options_map(pages: List[Dict]) -> Dict[str, str]:
         out[lab] = p["id"]
     return out
 
-def update_properties(page_id: str,
-                      status: Optional[str] = None,
-                      release: Optional[date] = None,
-                      recording: Optional[date] = None,
-                      topic: Optional[str] = None,
-                      guest: Optional[str] = None):
+def update_properties(page_id: str, status=None, release=None, recording=None, topic=None, guest=None):
     props = {}
-    if status:
-        props[PROP_STATUS] = {"select": {"name": status}}
+    if status is not None:
+        st_prop = DB_PROPS.get(PROP_STATUS, {})
+        if st_prop.get("type") == "status":
+            props[PROP_STATUS] = {"status": {"name": status}}
+        else:
+            props[PROP_STATUS] = {"select": {"name": status}}
     if release is not None:
         props[PROP_RELEASE] = {"date": {"start": release.isoformat()}}
     if recording is not None:
@@ -171,6 +175,7 @@ def update_properties(page_id: str,
         props[PROP_GUEST] = {"rich_text": [{"type": "text", "text": {"content": guest}}]} if guest else {"rich_text": []}
     if props:
         notion.pages.update(page_id=page_id, properties=props)
+
 
 def add_todos(page_id: str, items: List[str]):
     if not items:
