@@ -337,7 +337,6 @@ with tab_list:
     for p in pages:
         ...
 
-
 with tab_edit:
     pages = fetch_episodes()
     opts = options_map(pages)
