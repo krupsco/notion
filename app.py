@@ -62,7 +62,7 @@ PROP_RELEASE = "Release Date"
 PROP_RECORDING = "Recording Date"
 PROP_EP_NO = "Episode Number"
 PROP_GUEST = "Guest"
-PROP_TOPIC = "Topic"
+PROP_TOPIC = "Temat"
 
 STATUS_OPTIONS = ["Zaplanowany", "Szkic", "Nagrany", "Zmontowany", "Published"]
 
@@ -323,15 +323,20 @@ tab_list, tab_edit, tab_todos, tab_report, tab_diag, tab_cmd = st.tabs(
 with tab_list:
     pages = fetch_episodes()
     st.caption(f"Ostatnia aktualizacja: {datetime.now(LOCAL_TZ).strftime('%Y-%m-%d %H:%M')}")
+
+    # nagłówek tabeli
+    c1, c2, c3, c4, c5, c6, c7 = st.columns([6,2,3,3,3,4,4])
+    with c1: st.markdown("**Tytuł odcinka**")
+    with c2: st.markdown("**#**")
+    with c3: st.markdown("**Status**")
+    with c4: st.markdown("**Topic**")
+    with c5: st.markdown("**Guest**")
+    with c6: st.markdown("**Data nagrania**")
+    with c7: st.markdown("**Data publikacji**")
+
     for p in pages:
-        c1, c2, c3, c4, c5, c6, c7 = st.columns([6,2,3,3,3,4,4])
-        with c1: st.markdown(f"**{page_title(p)}**")
-        with c2: st.write(page_number(p) or "-")
-        with c3: st.write(page_status(p))
-        with c4: st.write(page_topic(p))
-        with c5: st.write(page_guest(p))
-        with c6: st.write(page_date(p, PROP_RECORDING) or "-")
-        with c7: st.write(page_date(p, PROP_RELEASE) or "-")
+        ...
+
 
 with tab_edit:
     pages = fetch_episodes()
