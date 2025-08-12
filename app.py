@@ -517,16 +517,3 @@ with tab_cmd:
             except json.JSONDecodeError:
                 st.error("Niepoprawny JSON.")
 
-
-
-    with tab_gen:
-        st.caption("Lokalny generator (do testów): wklej JSON, dostaniesz podpisany link.")
-        gen_json = st.text_area("JSON do podpisania", height=120,
-                                value='{"op":"update_properties","page":"#8 Opera, Warszawa, Zamek i małe biurko","props":{"Status":"Nagrany","Release Date":"2025-08-29"}}')
-        if st.button("Podpisz i pokaż link"):
-            payload_b64 = base64.urlsafe_b64encode(gen_json.encode("utf-8")).decode("utf-8").rstrip("=")
-            sig = sign_payload(payload_b64)
-            base = APP_BASE_URL or "https://example.streamlit.app"
-            url = f"{base}?cmd={payload_b64}&sig={sig}"
-            st.code(url)
-            st.caption("Skopiuj link, otwórz w przeglądarce i potwierdź wykonanie.")
