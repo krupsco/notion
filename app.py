@@ -474,19 +474,25 @@ with tab_cmd:
 
     # 2) Obsługa linku ?cmd=&sig= (klik, podgląd, wykonanie)
 with tab_cmd_link:
+    # stały sposób pobrania query params
     qp = st.experimental_get_query_params()
-
     cmd_b64 = qp.get("cmd", [None])[0]
     sig = qp.get("sig", [None])[0]
 
     if cmd_b64 and sig:
         expected = sign_payload(cmd_b64)
+
+        # Diagnostyka — nie ujawniasz sekretu, tylko porównanie podpisów
+        st.caption("Diagnostyka podpisu HMAC")
+        st.code(f"expected sig: {expected}")
+        st.code(f"provided sig: {sig}")
+
         if sig != expected:
-            st.error("Nieprawidłowy podpis polecenia (HMAC).")
+            st.error("Nieprawidłowy podpis (HMAC). Upewnij się, że COMMAND_SHARED_SECRET w Secrets zgadza się z tym użytym przy generowaniu linku, a appka została zrestartowana.")
         else:
             cmd = decode_cmd(cmd_b64)
             if not cmd:
-                st.error("Nie można zdekodować polecenia.")
+                st.error("Nie można zdekodować polecenia (cmd).")
             else:
                 st.write("**Podgląd polecenia:**")
                 st.json(cmd)
@@ -494,7 +500,7 @@ with tab_cmd_link:
                     ok, msg = apply_command(cmd)
                     (st.success if ok else st.error)(msg)
     else:
-        st.info("Brak `cmd`/`sig` w URL.")
+        st.info("Brak parametrów `cmd` i/lub `sig` w URL. Wygeneruj link w zakładce „Generator linku” lub wklej JSON w zakładce „Wklej polecenie”.")
 
 
     # 3) Generator linku z JSON (dla Ciebie, żeby szybko tworzyć klikane linki)
