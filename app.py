@@ -473,33 +473,29 @@ with tab_cmd:
                 st.error("Niepoprawny JSON.")
 
     # 2) Obsługa linku ?cmd=&sig= (klik, podgląd, wykonanie)
-    with tab_cmd_link:
-        try:
-            qp = st.query_params   # nowsze Streamlit
-        except Exception:
-            qp = st.experimental_get_query_params()
+with tab_cmd_link:
+    qp = st.experimental_get_query_params()
 
-        cmd_b64 = qp.get("cmd")
-        sig = qp.get("sig")
-        if isinstance(cmd_b64, list): cmd_b64 = cmd_b64[0] if cmd_b64 else None
-        if isinstance(sig, list): sig = sig[0] if sig else None
+    cmd_b64 = qp.get("cmd", [None])[0]
+    sig = qp.get("sig", [None])[0]
 
-        if cmd_b64 and sig:
-            expected = sign_payload(cmd_b64)
-            if sig != expected:
-                st.error("Nieprawidłowy podpis polecenia (HMAC).")
-            else:
-                cmd = decode_cmd(cmd_b64)
-                if not cmd:
-                    st.error("Nie można zdekodować polecenia.")
-                else:
-                    st.write("**Podgląd polecenia:**")
-                    st.json(cmd)
-                    if st.button("Wykonaj polecenie"):
-                        ok, msg = apply_command(cmd)
-                        (st.success if ok else st.error)(msg)
+    if cmd_b64 and sig:
+        expected = sign_payload(cmd_b64)
+        if sig != expected:
+            st.error("Nieprawidłowy podpis polecenia (HMAC).")
         else:
-            st.info("Brak `cmd`/`sig` w URL. Wygeneruj link w zakładce „Generator linku” lub w czacie.")
+            cmd = decode_cmd(cmd_b64)
+            if not cmd:
+                st.error("Nie można zdekodować polecenia.")
+            else:
+                st.write("**Podgląd polecenia:**")
+                st.json(cmd)
+                if st.button("Wykonaj polecenie", key="execute_cmd_from_link"):
+                    ok, msg = apply_command(cmd)
+                    (st.success if ok else st.error)(msg)
+    else:
+        st.info("Brak `cmd`/`sig` w URL.")
+
 
     # 3) Generator linku z JSON (dla Ciebie, żeby szybko tworzyć klikane linki)
     with tab_gen:
