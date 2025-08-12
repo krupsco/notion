@@ -55,7 +55,7 @@ def db_title_text(db_meta) -> str:
     t = db_meta.get("title", [])
     return "".join(x.get("plain_text", "") for x in t) if t else "(bez nazwy)"
 
-# ---------- NAZWY WŁAŚCIWOŚCI (dopasowane do Twojej bazy) ----------
+# ---------- NAZWY WŁAŚCIWOŚCI (DOPASOWANE DO TWOJEJ BAZY) ----------
 PROP_TITLE = "Episode Title"
 PROP_STATUS = "Status"
 PROP_RELEASE = "Release Date"
@@ -93,6 +93,28 @@ def page_status(p) -> str:
         val = prop.get("select")
     return val["name"] if val else "-"
 
+def page_topic(p) -> str:
+    prop = p["properties"].get(PROP_TOPIC, {})
+    t = prop.get("type")
+    if t == "multi_select":
+        items = prop.get("multi_select", [])
+        return ", ".join([i["name"] for i in items]) if items else "-"
+    elif t == "select":
+        sel = prop.get("select")
+        return sel["name"] if sel else "-"
+    else:
+        return "-"
+
+def page_guest(p) -> str:
+    prop = p["properties"].get(PROP_GUEST, {})
+    t = prop.get("type")
+    if t == "people":
+        people = prop.get("people", [])
+        return ", ".join([pp.get("name", "—") for pp in people]) if people else "-"
+    elif t in ["rich_text", "text"]:
+        return get_text(prop.get("rich_text", [])) or "-"
+    else:
+        return "-"
 
 def page_date(p, prop_name: str) -> Optional[str]:
     d = p["properties"].get(prop_name, {}).get("date")
@@ -105,17 +127,15 @@ def parse_date_any(s: Optional[str]) -> Optional[date]:
     if not s:
         return None
     try:
-        # "YYYY-MM-DD"
-        return date.fromisoformat(s[:10])
+        return date.fromisoformat(s[:10])  # YYYY-MM-DD
     except Exception:
         try:
-            # "YYYY-MM-DDTHH:MM:SSZ"
             return datetime.fromisoformat(s.replace("Z", "+00:00")).date()
         except Exception:
             return None
 
 def fetch_episodes_safe(notion_client: Client, db_id: str, sort_prop: Optional[str]) -> List[Dict]:
-    # 1) bez sortowania — upewnij się, że ID i uprawnienia są ok
+    # 1) bez sortowania — sanity check ID/uprawnienia
     pages, cursor = [], None
     while True:
         kwargs = {"database_id": db_id}
@@ -127,7 +147,7 @@ def fetch_episodes_safe(notion_client: Client, db_id: str, sort_prop: Optional[s
             break
         cursor = resp.get("next_cursor")
 
-    # 2) jeżeli sort_prop istnieje w schemacie — dociągnij posortowane
+    # 2) posortuj, tylko jeśli pole istnieje
     if sort_prop and sort_prop in DB_PROPS:
         pages_sorted, cursor = [], None
         while True:
@@ -157,25 +177,45 @@ def options_map(pages: List[Dict]) -> Dict[str, str]:
         out[lab] = p["id"]
     return out
 
-def update_properties(page_id: str, status=None, release=None, recording=None, topic=None, guest=None):
+def update_properties(page_id: str,
+                      status: Optional[str] = None,
+                      release: Optional[date] = None,
+                      recording: Optional[date] = None,
+                      topic: Optional[str] = None,
+                      guest: Optional[str] = None):
     props = {}
+    # Status: obsługa status/select
     if status is not None:
         st_prop = DB_PROPS.get(PROP_STATUS, {})
         if st_prop.get("type") == "status":
             props[PROP_STATUS] = {"status": {"name": status}}
         else:
             props[PROP_STATUS] = {"select": {"name": status}}
+    # Release/Recording
     if release is not None:
         props[PROP_RELEASE] = {"date": {"start": release.isoformat()}}
     if recording is not None:
         props[PROP_RECORDING] = {"date": {"start": recording.isoformat()}}
+    # Topic: obsługa multi_select/select
     if topic:
-        props[PROP_TOPIC] = {"select": {"name": topic}}
+        topic_prop = DB_PROPS.get(PROP_TOPIC, {})
+        if topic_prop.get("type") == "multi_select":
+            items = [{"name": t.strip()} for t in topic.split(",") if t.strip()]
+            props[PROP_TOPIC] = {"multi_select": items}
+        else:
+            props[PROP_TOPIC] = {"select": {"name": topic}}
+    # Guest: people/rich_text
     if guest is not None:
-        props[PROP_GUEST] = {"rich_text": [{"type": "text", "text": {"content": guest}}]} if guest else {"rich_text": []}
+        guest_prop = DB_PROPS.get(PROP_GUEST, {})
+        if guest_prop.get("type") == "people":
+            # Uwaga: ustawienie 'people' wymaga ID użytkowników Notion (nie imion).
+            # Tu tylko ostrzegamy i nie nadpisujemy, aby nie wyczyścić istniejących danych.
+            st.warning("Pole 'Guest' ma typ 'people' — do ustawienia wymagane są ID użytkowników Notion. Pomijam zapis.")
+        else:
+            props[PROP_GUEST] = {"rich_text": [{"type": "text", "text": {"content": guest}}]} if guest else {"rich_text": []}
+
     if props:
         notion.pages.update(page_id=page_id, properties=props)
-
 
 def add_todos(page_id: str, items: List[str]):
     if not items:
@@ -221,8 +261,7 @@ def sign_payload(payload_b64: str) -> str:
 
 def decode_cmd(cmd_b64: str) -> Optional[dict]:
     try:
-        # dopełnienie =, jeśli trzeba
-        pad = "=" * (-len(cmd_b64) % 4)
+        pad = "=" * (-len(cmd_b64) % 4)  # dopełnienie Base64URL
         data = base64.urlsafe_b64decode(cmd_b64 + pad)
         return json.loads(data.decode("utf-8"))
     except Exception:
@@ -285,20 +324,22 @@ with tab_list:
     pages = fetch_episodes()
     st.caption(f"Ostatnia aktualizacja: {datetime.now(LOCAL_TZ).strftime('%Y-%m-%d %H:%M')}")
     for p in pages:
-        c1, c2, c3, c4, c5 = st.columns([6,2,3,3,3])
+        c1, c2, c3, c4, c5, c6, c7 = st.columns([6,2,3,3,3,4,4])
         with c1: st.markdown(f"**{page_title(p)}**")
         with c2: st.write(page_number(p) or "-")
         with c3: st.write(page_status(p))
-        with c4: st.write(page_date(p, PROP_RECORDING) or "-")
-        with c5: st.write(page_date(p, PROP_RELEASE) or "-")
+        with c4: st.write(page_topic(p))
+        with c5: st.write(page_guest(p))
+        with c6: st.write(page_date(p, PROP_RECORDING) or "-")
+        with c7: st.write(page_date(p, PROP_RELEASE) or "-")
 
 with tab_edit:
     pages = fetch_episodes()
     opts = options_map(pages)
     sel = st.selectbox("Wybierz odcinek", list(opts.keys()))
     new_status = st.selectbox("Status", STATUS_OPTIONS, index=STATUS_OPTIONS.index("Szkic") if "Szkic" in STATUS_OPTIONS else 0)
-    new_topic = st.text_input("Topic (select) — zostaw puste, jeśli bez zmian")
-    new_guest = st.text_input("Guest (rich_text) — zostaw puste, jeśli bez zmian")
+    new_topic = st.text_input("Topic — dla multi‑select podaj po przecinku (np. 'Historia, Zamek') / dla select wpisz jedną wartość")
+    new_guest = st.text_input("Guest — jeśli pole ma typ 'people', zapisz ręcznie w Notion (tu obsługujemy rich_text)")
     colA, colB = st.columns(2)
     with colA:
         new_recording = st.date_input("Recording Date (opcjonalnie)", value=None)
