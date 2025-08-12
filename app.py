@@ -328,11 +328,19 @@ tab_list, tab_edit, tab_todos, tab_report, tab_diag, tab_cmd = st.tabs(
     ["Przegląd odcinków", "Aktualizuj właściwości", "Dodaj checklistę", "Mini‑raport", "Diagnostyka", "Polecenia"]
 )
 
+from urllib.parse import urlencode
+
+def make_command_link(cmd_dict):
+    payload_json = json.dumps(cmd_dict)
+    payload_b64 = base64.urlsafe_b64encode(payload_json.encode("utf-8")).decode("utf-8").rstrip("=")
+    sig = sign_payload(payload_b64)
+    return f"{APP_BASE_URL}?{urlencode({'cmd': payload_b64, 'sig': sig})}"
+
 with tab_list:
     pages = fetch_episodes()
     st.caption(f"Ostatnia aktualizacja: {datetime.now(LOCAL_TZ).strftime('%Y-%m-%d %H:%M')}")
 
-    c1, c2, c3, c4, c5, c6, c7 = st.columns([6,2,3,3,3,4,4])
+    c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([6,2,3,3,3,4,4,2])
     with c1: st.markdown("**Tytuł odcinka**")
     with c2: st.markdown("**#**")
     with c3: st.markdown("**Status**")
@@ -340,9 +348,11 @@ with tab_list:
     with c5: st.markdown("**Guest**")
     with c6: st.markdown("**Data nagrania**")
     with c7: st.markdown("**Data publikacji**")
+    with c8: st.markdown("**Command**")
 
     for p in pages:
-        c1, c2, c3, c4, c5, c6, c7 = st.columns([6,2,3,3,3,4,4])
+        ep_label = f"#{page_number(p)} {page_title(p)}"
+        c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([6,2,3,3,3,4,4,2])
         with c1: st.write(safe(page_title(p)))
         with c2: st.write(safe(page_number(p)))
         with c3: st.write(safe(page_status(p)))
@@ -350,6 +360,15 @@ with tab_list:
         with c5: st.write(safe(page_guest(p)))
         with c6: st.write(safe(page_date(p, PROP_RECORDING)))
         with c7: st.write(safe(page_date(p, PROP_RELEASE)))
+        with c8:
+            cmd_dict = {
+                "op": "update_properties",
+                "page": ep_label,
+                "props": {"Status": "Nagrany"}  # przykład
+            }
+            link = make_command_link(cmd_dict)
+            st.markdown(f"[link]({link})")
+
 
 
 with tab_edit:
