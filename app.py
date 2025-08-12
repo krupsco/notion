@@ -170,8 +170,16 @@ with tab_todos:
     if mode == "Domyślna checklista":
         items = DEFAULT_CHECKLIST
         st.write("Zostaną dodane:")
-        for i in items: st.write(f"• {i}")
+        for i in items:
+            st.write(f"• {i}")
     else:
         txt = st.text_area("Wpisz punkty (jeden na linię)", height=180, placeholder="punkt 1\npunkt 2\npunkt 3")
         items = [l.strip() for l in txt.splitlines() if l.strip()]
-    if st.button("Dodaj checklistę
+
+    if st.button("Dodaj checklistę"):
+        if not items:
+            st.warning("Brak pozycji do dodania.")
+        else:
+            add_todos(opts[sel], items)
+            st.success("Checklistę dodano.")
+
