@@ -324,7 +324,6 @@ with tab_list:
     pages = fetch_episodes()
     st.caption(f"Ostatnia aktualizacja: {datetime.now(LOCAL_TZ).strftime('%Y-%m-%d %H:%M')}")
 
-    # nagłówek tabeli
     c1, c2, c3, c4, c5, c6, c7 = st.columns([6,2,3,3,3,4,4])
     with c1: st.markdown("**Tytuł odcinka**")
     with c2: st.markdown("**#**")
@@ -335,7 +334,15 @@ with tab_list:
     with c7: st.markdown("**Data publikacji**")
 
     for p in pages:
-        ...
+        c1, c2, c3, c4, c5, c6, c7 = st.columns([6,2,3,3,3,4,4])
+        with c1: st.write(safe(page_title(p)))
+        with c2: st.write(safe(page_number(p)))
+        with c3: st.write(safe(page_status(p)))
+        with c4: st.write(safe(page_topic(p)))
+        with c5: st.write(safe(page_guest(p)))
+        with c6: st.write(safe(page_date(p, PROP_RECORDING)))
+        with c7: st.write(safe(page_date(p, PROP_RELEASE)))
+
 
 with tab_edit:
     pages = fetch_episodes()
