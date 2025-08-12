@@ -79,6 +79,14 @@ DEFAULT_CHECKLIST = [
 ]
 
 # ---------- HELPERY ----------
+def safe(val):
+    # wycina pythonowy Ellipsis i puste wartości
+    if val is Ellipsis:
+        return "-"
+    if val in (None, "", [], {}):
+        return "-"
+    return str(val)
+
 def get_text(rich: list) -> str:
     return "".join([x.get("plain_text", "") for x in rich]) if rich else ""
 
