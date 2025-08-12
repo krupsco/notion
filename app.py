@@ -322,6 +322,23 @@ def apply_command(cmd: dict) -> (bool, str):
         add_todos(page_id, items)
         return True, "Checklistę dodano."
 
+    elif op == "add_note":
+    pages = fetch_episodes()
+    page_label = cmd.get("page")
+    page_id = find_page_id_by_label(pages, page_label) if page_label else cmd.get("page_id")
+    if not page_id:
+        return False, "Nie znaleziono strony odcinka (page/page_id)."
+    note = cmd.get("note", "").strip()
+    if not note:
+        return False, "Brak treści notatki."
+    notion.blocks.children.append(page_id, children=[{
+        "object": "block",
+        "type": "paragraph",
+        "paragraph": {"rich_text": [{"type": "text", "text": {"content": note}}]}
+    }])
+    return True, "Notatkę dodano."
+
+
     else:
         return False, f"Nieznana operacja: {op}"
 
@@ -474,21 +491,15 @@ with tab_cmd:
 
     # 2) Obsługa linku ?cmd=&sig= (klik, podgląd, wykonanie)
 with tab_cmd_link:
-    # stały sposób pobrania query params
     qp = st.experimental_get_query_params()
     cmd_b64 = qp.get("cmd", [None])[0]
     sig = qp.get("sig", [None])[0]
+    auto = qp.get("auto", ["0"])[0]  # "1" = auto-execute
 
     if cmd_b64 and sig:
         expected = sign_payload(cmd_b64)
-
-        # Diagnostyka — nie ujawniasz sekretu, tylko porównanie podpisów
-        st.caption("Diagnostyka podpisu HMAC")
-        st.code(f"expected sig: {expected}")
-        st.code(f"provided sig: {sig}")
-
         if sig != expected:
-            st.error("Nieprawidłowy podpis (HMAC). Upewnij się, że COMMAND_SHARED_SECRET w Secrets zgadza się z tym użytym przy generowaniu linku, a appka została zrestartowana.")
+            st.error("Nieprawidłowy podpis polecenia (HMAC).")
         else:
             cmd = decode_cmd(cmd_b64)
             if not cmd:
@@ -496,11 +507,20 @@ with tab_cmd_link:
             else:
                 st.write("**Podgląd polecenia:**")
                 st.json(cmd)
-                if st.button("Wykonaj polecenie", key="execute_cmd_from_link"):
-                    ok, msg = apply_command(cmd)
+
+                if auto == "1":
+                    # (opcjonalnie) mini-odliczanie
+                    import time
+                    with st.spinner("Wykonuję polecenie..."):
+                        ok, msg = apply_command(cmd)
                     (st.success if ok else st.error)(msg)
+                else:
+                    if st.button("Wykonaj polecenie", key="execute_cmd_from_link"):
+                        ok, msg = apply_command(cmd)
+                        (st.success if ok else st.error)(msg)
     else:
-        st.info("Brak parametrów `cmd` i/lub `sig` w URL. Wygeneruj link w zakładce „Generator linku” lub wklej JSON w zakładce „Wklej polecenie”.")
+        st.info("Brak parametrów `cmd` i/lub `sig` w URL. "
+                "Dodaj `auto=1` aby wykonać bez potwierdzenia.")
 
 
     # 3) Generator linku z JSON (dla Ciebie, żeby szybko tworzyć klikane linki)
