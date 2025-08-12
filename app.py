@@ -7,6 +7,7 @@
 #   COMMAND_SHARED_SECRET = "<długi-losowy-klucz-HMAC>"
 #   APP_BASE_URL = "https://<twoja-aplikacja>.streamlit.app"
 
+import os
 import json, base64, hmac, hashlib
 from urllib.parse import urlencode
 from datetime import datetime, date
