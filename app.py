@@ -334,9 +334,14 @@ def apply_command(cmd: dict) -> (bool, str):
         notion.blocks.children.append(page_id, children=[{
             "object": "block",
             "type": "paragraph",
-            "paragraph": {"rich_text": [{"type": "text", "text": {"content": note}}]}
-    }])
-    return True, "Notatkę dodano."
+            "paragraph": {
+                "rich_text": [
+                    {"type": "text", "text": {"content": note}}
+                ]
+            }
+        }])
+        return True, "Notatkę dodano."
+
 
 
     else:
