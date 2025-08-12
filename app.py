@@ -263,15 +263,28 @@ def quick_report(pages: List[Dict]) -> str:
 
 # ---------- COMMAND API (polecenia z czatu) ----------
 def sign_payload(payload_b64: str) -> str:
+    # payload_b64 to DOKŁADNIE to, co w cmd=...
     return hmac.new(
         key=COMMAND_SHARED_SECRET.encode("utf-8"),
         msg=payload_b64.encode("utf-8"),
         digestmod=hashlib.sha256
     ).hexdigest()
 
-def decode_cmd(cmd_b64: str) -> Optional[dict]:
+def make_command_link(cmd_dict: dict) -> str:
+    # 1) deterministyczny JSON (brak spacji, stała kolejność kluczy)
+    payload_json = json.dumps(cmd_dict, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    # 2) URL-safe Base64 BEZ paddingu "="
+    payload_b64 = base64.urlsafe_b64encode(payload_json.encode("utf-8")).decode("utf-8").rstrip("=")
+    # 3) podpis
+    sig = sign_payload(payload_b64)
+    # 4) budowa URL
+    base = APP_BASE_URL or "https://example.streamlit.app"
+    return f"{base}?{urlencode({'cmd': payload_b64, 'sig': sig})}"
+
+def decode_cmd(cmd_b64: str) -> dict | None:
     try:
-        pad = "=" * (-len(cmd_b64) % 4)  # dopełnienie Base64URL
+        # dopełnij padding do 4
+        pad = "=" * (-len(cmd_b64) % 4)
         data = base64.urlsafe_b64decode(cmd_b64 + pad)
         return json.loads(data.decode("utf-8"))
     except Exception:
@@ -496,6 +509,7 @@ with tab_cmd:
 
     # 2) Obsługa linku ?cmd=&sig= (klik, podgląd, wykonanie)
 with tab_cmd_link:
+    # Pobierz parametry z URL: ?cmd=<base64-json>&sig=<hmac>&auto=1
     qp = st.experimental_get_query_params()
     cmd_b64 = qp.get("cmd", [None])[0]
     sig = qp.get("sig", [None])[0]
@@ -503,8 +517,13 @@ with tab_cmd_link:
 
     if cmd_b64 and sig:
         expected = sign_payload(cmd_b64)
+
         if sig != expected:
             st.error("Nieprawidłowy podpis polecenia (HMAC).")
+            # opcjonalna diagnostyka:
+            # st.caption("Diagnostyka podpisu HMAC")
+            # st.code(f"expected sig: {expected}")
+            # st.code(f"provided sig: {sig}")
         else:
             cmd = decode_cmd(cmd_b64)
             if not cmd:
@@ -514,7 +533,6 @@ with tab_cmd_link:
                 st.json(cmd)
 
                 if auto == "1":
-                    # (opcjonalnie) mini-odliczanie
                     import time
                     with st.spinner("Wykonuję polecenie..."):
                         ok, msg = apply_command(cmd)
@@ -524,8 +542,10 @@ with tab_cmd_link:
                         ok, msg = apply_command(cmd)
                         (st.success if ok else st.error)(msg)
     else:
-        st.info("Brak parametrów `cmd` i/lub `sig` w URL. "
-                "Dodaj `auto=1` aby wykonać bez potwierdzenia.")
+        st.info(
+            "Brak parametrów `cmd` i/lub `sig` w URL. "
+            "Dodaj `auto=1`, aby wykonać bez potwierdzenia."
+        )
 
 
     # 3) Generator linku z JSON (dla Ciebie, żeby szybko tworzyć klikane linki)
